@@ -1000,9 +1000,9 @@ static void Run()
         // Clears bitmap
         for(i = 0; i < s32Width * s32Height * sizeof(orxRGBA); i+= 4)
         {
-          pu8ImageBuffer[i]     = 0xFF;
-          pu8ImageBuffer[i + 1] = 0xFF;
-          pu8ImageBuffer[i + 2] = 0xFF;
+          pu8ImageBuffer[i]     = 0x00;
+          pu8ImageBuffer[i + 1] = 0x00;
+          pu8ImageBuffer[i + 2] = 0x00;
           pu8ImageBuffer[i + 3] = 0x00;
         }
 
@@ -1122,9 +1122,43 @@ static void Run()
                 s32BitmapHeight = orxF2S(sstFontGen.pstFontFace->glyph->bitmap.rows);
 
                 msdfgen::Bitmap<float, 4> mtsdf(s32BitmapWidth, s32BitmapHeight);
-                msdfgen::Vector2 translate(-orxS2F(sstFontGen.pstFontFace->glyph->bitmap_left), orxS2F(sstFontGen.pstFontFace->glyph->bitmap.rows) - orxS2F(sstFontGen.pstFontFace->glyph->bitmap_top));
-                
-                generateMTSDF(mtsdf, shape, sstFontGen.fRange, 1.0, translate);
+                msdfgen::Vector2 translate;
+
+                msdfgen::Vector2 scale(1.0);
+                if (true)
+                {
+                  double outputDistanceShift = 0.0; // TODO
+
+                  msdfgen::Shape::Bounds bounds = shape.getBounds();
+
+                  double l = bounds.l, b = bounds.b, r = bounds.r, t = bounds.t;
+                  msdfgen::Vector2 frame(s32BitmapWidth, s32BitmapHeight);
+                  double m = .5 + (double)outputDistanceShift;
+
+                  frame -= 2 * m * sstFontGen.fRange;
+
+                  if (l >= r || b >= t) {
+                    l = 0, b = 0, r = 1, t = 1;
+                  }
+
+                  orxASSERT(frame.x > 0 && frame.y > 0);
+
+                  
+
+                  msdfgen::Vector2 dims(r - l, t - b);
+                  if (dims.x * frame.y < dims.y * frame.x) {
+                    translate.set(.5 * (frame.x / frame.y * dims.y - dims.x) - l, -b);
+                    scale = frame.y / dims.y;
+                  }
+                  else {
+                    translate.set(-l, .5 * (frame.y / frame.x * dims.x - dims.y) - b);
+                    scale = frame.x / dims.x;
+                  }
+
+                  translate += m * sstFontGen.fRange / scale;
+                }
+
+                generateMTSDF(mtsdf, shape, sstFontGen.fRange, scale, translate);
 
                 // For all rows
                 for (i = mtsdf.height() - 1, pu8Dst = pu8ImageBuffer + sizeof(orxRGBA) * ((s32AdjustedY * s32Width) + s32AdjustedX);
