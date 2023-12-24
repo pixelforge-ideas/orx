@@ -54,8 +54,7 @@
 #include "ftoutln.h"
 #include FT_FREETYPE_H
 
-#define MSDFGEN_PUBLIC
-#include "msdfgen.h"
+#include "msdfgen_wrapper.h"
 
 #ifdef __orxGCC__
 
@@ -152,68 +151,6 @@ static orxFONTGEN_STATIC sstFontGen;
 /***************************************************************************
  * Private functions                                                       *
  ***************************************************************************/
-
-struct FtContext {
-  msdfgen::Point2 position;
-  msdfgen::Shape* shape;
-  msdfgen::Contour* contour;
-};
-
-#define F26DOT6_TO_DOUBLE(x) (1/64.*double(x))
-
-static msdfgen::Point2 ftPoint2(const FT_Vector& vector) {
-  return msdfgen::Point2(F26DOT6_TO_DOUBLE(vector.x), F26DOT6_TO_DOUBLE(vector.y));
-}
-
-static int ftMoveTo(const FT_Vector* to, void* user) {
-  FtContext* context = reinterpret_cast<FtContext*>(user);
-  if (!(context->contour && context->contour->edges.empty()))
-    context->contour = &context->shape->addContour();
-  context->position = ftPoint2(*to);
-  return 0;
-}
-
-static int ftLineTo(const FT_Vector* to, void* user) {
-  FtContext* context = reinterpret_cast<FtContext*>(user);
-  msdfgen::Point2 endpoint = ftPoint2(*to);
-  if (endpoint != context->position) {
-    context->contour->addEdge(new msdfgen::LinearSegment(context->position, endpoint));
-    context->position = endpoint;
-  }
-  return 0;
-}
-
-static int ftConicTo(const FT_Vector* control, const FT_Vector* to, void* user) {
-  FtContext* context = reinterpret_cast<FtContext*>(user);
-  context->contour->addEdge(new msdfgen::QuadraticSegment(context->position, ftPoint2(*control), ftPoint2(*to)));
-  context->position = ftPoint2(*to);
-  return 0;
-}
-
-static int ftCubicTo(const FT_Vector* control1, const FT_Vector* control2, const FT_Vector* to, void* user) {
-  FtContext* context = reinterpret_cast<FtContext*>(user);
-  context->contour->addEdge(new msdfgen::CubicSegment(context->position, ftPoint2(*control1), ftPoint2(*control2), ftPoint2(*to)));
-  context->position = ftPoint2(*to);
-  return 0;
-}
-
-static FT_Error readFreetypeOutline(msdfgen::Shape& output, FT_Outline* outline) {
-  output.contours.clear();
-  output.inverseYAxis = false;
-  FtContext context = { };
-  context.shape = &output;
-  FT_Outline_Funcs ftFunctions;
-  ftFunctions.move_to = &ftMoveTo;
-  ftFunctions.line_to = &ftLineTo;
-  ftFunctions.conic_to = &ftConicTo;
-  ftFunctions.cubic_to = &ftCubicTo;
-  ftFunctions.shift = 0;
-  ftFunctions.delta = 0;
-  FT_Error error = FT_Outline_Decompose(outline, &ftFunctions, &context);
-  if (!output.contours.empty() && output.contours.back().edges.empty())
-    output.contours.pop_back();
-  return error;
-}
 
 static orxBOOL orxFASTCALL SaveFilter(const orxSTRING _zSectionName, const orxSTRING _zKeyName, const orxSTRING _zFileName, orxBOOL _bUseEncryption)
 {
@@ -992,19 +929,13 @@ static void Run()
       // Valid?
       if(pu8ImageBuffer)
       {
-        orxU32            u32Size, s32Index, i;
+        orxU32            u32Size, s32Index;
         orxS32            s32X, s32Y;
         orxFONTGEN_GLYPH *pstGlyph;
         orxCHAR           acBuffer[orxFONTGEN_KU32_BUFFER_SIZE], *pc;
 
         // Clears bitmap
-        for(i = 0; i < s32Width * s32Height * sizeof(orxRGBA); i+= 4)
-        {
-          pu8ImageBuffer[i]     = 0x00;
-          pu8ImageBuffer[i + 1] = 0x00;
-          pu8ImageBuffer[i + 2] = 0x00;
-          pu8ImageBuffer[i + 3] = 0x00;
-        }
+        orxMemory_Zero(pu8ImageBuffer, s32Width * s32Height * sizeof(orxRGBA));
 
         // For all defined glyphs
         for(s32Index = 0, pstGlyph = (orxFONTGEN_GLYPH *)orxLinkList_GetFirst(&sstFontGen.stGlyphList), pc = acBuffer, u32Size = orxFONTGEN_KU32_BUFFER_SIZE - 1, s32X = 0, s32Y = s32BaseLine;
@@ -1107,78 +1038,33 @@ static void Run()
                 orxFONTGEN_LOG(PROCESS, "Cropping %d row(s) from character [U+%X] '%s'.", s32DeltaHeight, pstGlyph->u32CodePoint, pc);
               }
 
-              if (orxFLAG_TEST(sstFontGen.u32Flags, orxFONTGEN_KU32_STATIC_FLAG_SDF))
+              if(orxFLAG_TEST(sstFontGen.u32Flags, orxFONTGEN_KU32_STATIC_FLAG_SDF))
               {
-                orxS32 s32BitmapWidth, s32BitmapHeight;
+                unsigned char* pSdfBuffer;
+                unsigned char* pSrc;
+                int s32BufferSize, s32BytesWritten, s32Stride;
+                orxS32 s32BitmapWidth = sstFontGen.pstFontFace->glyph->bitmap.width;
 
-                msdfgen::Shape shape;
-                readFreetypeOutline(shape, &sstFontGen.pstFontFace->glyph->outline);
+                s32BufferSize = generateMTSDF(NULL, 0, sstFontGen.pstFontFace->glyph, sstFontGen.fRange, 3.0, &s32Stride);
 
-                shape.normalize();
-                edgeColoringInkTrap(shape, 3.0);
+                pSdfBuffer = (unsigned char*)orxMemory_Allocate(s32BufferSize, orxMEMORY_TYPE_MAIN);
+                s32BytesWritten = generateMTSDF(pSdfBuffer, 0, sstFontGen.pstFontFace->glyph, sstFontGen.fRange, 3.0, &s32Stride);
 
-                // TODO: The MTSDF generator crops the range data for e.g. Range = 6...
-                s32BitmapWidth = orxF2S(sstFontGen.pstFontFace->glyph->bitmap.width);
-                s32BitmapHeight = orxF2S(sstFontGen.pstFontFace->glyph->bitmap.rows);
+                orxASSERT(s32BytesWritten == s32BufferSize);
 
-                msdfgen::Bitmap<float, 4> mtsdf(s32BitmapWidth, s32BitmapHeight);
-                msdfgen::Vector2 translate;
+                pSrc = pSdfBuffer;
+                pu8Dst = pu8ImageBuffer + sizeof(orxRGBA) * ((s32AdjustedY * s32Width) + s32AdjustedX);
 
-                msdfgen::Vector2 scale(1.0);
-                if (true)
+                // For all pixels
+                while (pSrc < pSdfBuffer + s32BytesWritten)
                 {
-                  double outputDistanceShift = 0.0; // TODO
+                  orxMemory_Copy(pu8Dst, pSrc, s32BitmapWidth * sizeof(orxRGBA));
+                  pu8Dst += sizeof(orxRGBA) * s32Width;
 
-                  msdfgen::Shape::Bounds bounds = shape.getBounds();
-
-                  double l = bounds.l, b = bounds.b, r = bounds.r, t = bounds.t;
-                  msdfgen::Vector2 frame(s32BitmapWidth, s32BitmapHeight);
-                  double m = .5 + (double)outputDistanceShift;
-
-                  frame -= 2 * m * sstFontGen.fRange;
-
-                  if (l >= r || b >= t) {
-                    l = 0, b = 0, r = 1, t = 1;
-                  }
-
-                  orxASSERT(frame.x > 0 && frame.y > 0);
-
-                  
-
-                  msdfgen::Vector2 dims(r - l, t - b);
-                  if (dims.x * frame.y < dims.y * frame.x) {
-                    translate.set(.5 * (frame.x / frame.y * dims.y - dims.x) - l, -b);
-                    scale = frame.y / dims.y;
-                  }
-                  else {
-                    translate.set(-l, .5 * (frame.y / frame.x * dims.x - dims.y) - b);
-                    scale = frame.x / dims.x;
-                  }
-
-                  translate += m * sstFontGen.fRange / scale;
+                  pSrc += s32Stride;
                 }
 
-                generateMTSDF(mtsdf, shape, sstFontGen.fRange, scale, translate);
-
-                // For all rows
-                for (i = mtsdf.height() - 1, pu8Dst = pu8ImageBuffer + sizeof(orxRGBA) * ((s32AdjustedY * s32Width) + s32AdjustedX);
-                  i >= 0;
-                  i--, pu8Dst += sizeof(orxRGBA) * (s32Width - mtsdf.width()))
-                {
-                  orxS32 j;
-
-                  // For all columns
-                  for (j = 0;
-                    j < mtsdf.width();
-                    j++, pu8Dst += sizeof(orxRGBA))
-                  {
-                    // Sets texture's pixel
-                    pu8Dst[0] = msdfgen::pixelFloatToByte(mtsdf(j, i)[0]);
-                    pu8Dst[1] = msdfgen::pixelFloatToByte(mtsdf(j, i)[1]);
-                    pu8Dst[2] = msdfgen::pixelFloatToByte(mtsdf(j, i)[2]);
-                    pu8Dst[3] = msdfgen::pixelFloatToByte(mtsdf(j, i)[3]);
-                  }
-                }
+                orxMemory_Free(pSdfBuffer);
               }
               else
               {
@@ -1195,6 +1081,9 @@ static void Run()
                     j++, pu8Src++, pu8Dst += sizeof(orxRGBA))
                   {
                     // Sets texture's pixel
+                    pu8Dst[0] = 0xFF;
+                    pu8Dst[1] = 0xFF;
+                    pu8Dst[2] = 0xFF;
                     pu8Dst[3] = pu8Src[0];
                   }
                 }
