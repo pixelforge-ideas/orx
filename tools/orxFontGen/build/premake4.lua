@@ -96,7 +96,9 @@ solution "orxFontGen"
         "../../../extern/stb_image",
         "$(ORX)/../extern/stb_image",
         "../../../extern/freetype/include",
-        "$(ORX)/../extern/freetype/include"
+        "$(ORX)/../extern/freetype/include",
+        "../../../extern/msdfgen",
+        "$(ORX)/../extern/msdfgen"
     }
 
     configuration {"not macosx"}
@@ -158,14 +160,18 @@ solution "orxFontGen"
         libdirs
         {
             "../../../extern/freetype/lib/linux",
-            "$(ORX)/../extern/freetype/lib/linux"
+            "$(ORX)/../extern/freetype/lib/linux",
+            "../../../extern/msdfgen/lib/linux",
+            "$(ORX)/../extern/msdfgen/lib/linux"
         }
 
     configuration {"linux", "x64"}
         libdirs
         {
             "../../../extern/freetype/lib/linux64",
-            "$(ORX)/../extern/freetype/lib/linux64"
+            "$(ORX)/../extern/freetype/lib/linux64",
+            "../../../extern/msdfgen/lib/linux64",
+            "$(ORX)/../extern/msdfgen/lib/linux64"
         }
 
     configuration {"linux"}
@@ -182,7 +188,9 @@ solution "orxFontGen"
         libdirs
         {
             "../../../extern/freetype/lib/mac",
-            "$(ORX)/../extern/freetype/lib/mac"
+            "$(ORX)/../extern/freetype/lib/mac",
+            "../../../extern/msdfgen/lib/mac",
+            "$(ORX)/../extern/msdfgen/lib/mac"
         }
         buildoptions
         {
@@ -220,28 +228,36 @@ solution "orxFontGen"
         libdirs
         {
             "../../../extern/freetype/lib/vc2015/32",
-            "$(ORX)/../extern/freetype/lib/vc2015/32"
+            "$(ORX)/../extern/freetype/lib/vc2015/32",
+            "../../../extern/msdfgen/lib/vc2015/32",
+            "$(ORX)/../extern/msdfgen/lib/vc2015/32"
         }
 
     configuration {"vs2017 or vs2019 or vs2022", "x64"}
         libdirs
         {
             "../../../extern/freetype/lib/vc2015/64",
-            "$(ORX)/../extern/freetype/lib/vc2015/64"
+            "$(ORX)/../extern/freetype/lib/vc2015/64",
+            "../../../extern/msdfgen/lib/vc2015/64",
+            "$(ORX)/../extern/msdfgen/lib/vc2015/64"
         }
 
     configuration {"windows", "gmake or codelite or codeblocks", "x32"}
         libdirs
         {
             "../../../extern/freetype/lib/mingw/32",
-            "$(ORX)/../extern/freetype/lib/mingw/32"
+            "$(ORX)/../extern/freetype/lib/mingw/32",
+            "../../../extern/msdfgen/lib/mingw/32",
+            "$(ORX)/../extern/msdfgen/lib/mingw/32"
         }
 
     configuration {"windows", "gmake or codelite or codeblocks", "x64"}
         libdirs
         {
             "../../../extern/freetype/lib/mingw/64",
-            "$(ORX)/../extern/freetype/lib/mingw/64"
+            "$(ORX)/../extern/freetype/lib/mingw/64",
+            "../../../extern/msdfgen/lib/mingw/64",
+            "$(ORX)/../extern/msdfgen/lib/mingw/64"
         }
 
     configuration {"windows", "gmake", "x32"}
@@ -287,7 +303,8 @@ project "orxFontGen"
     targetname ("orxfontgen")
     links
     {
-        "freetype"
+        "freetype",
+        "msdfgen"
     }
 
 
