@@ -1040,31 +1040,15 @@ static void Run()
 
               if(orxFLAG_TEST(sstFontGen.u32Flags, orxFONTGEN_KU32_STATIC_FLAG_SDF))
               {
-                unsigned char* pSdfBuffer;
-                unsigned char* pSrc;
-                int s32BufferSize, s32BytesWritten, s32Stride;
-                orxS32 s32BitmapWidth = sstFontGen.pstFontFace->glyph->bitmap.width;
+                orxS32 s32Result, s32Stride;
 
-                s32BufferSize = generateMTSDF(NULL, 0, sstFontGen.pstFontFace->glyph, sstFontGen.fRange, 3.0, &s32Stride);
-
-                pSdfBuffer = (unsigned char*)orxMemory_Allocate(s32BufferSize, orxMEMORY_TYPE_MAIN);
-                s32BytesWritten = generateMTSDF(pSdfBuffer, 0, sstFontGen.pstFontFace->glyph, sstFontGen.fRange, 3.0, &s32Stride);
-
-                orxASSERT(s32BytesWritten == s32BufferSize);
-
-                pSrc = pSdfBuffer;
+                s32Stride = sizeof(orxRGBA) * s32Width;
                 pu8Dst = pu8ImageBuffer + sizeof(orxRGBA) * ((s32AdjustedY * s32Width) + s32AdjustedX);
 
-                // For all pixels
-                while (pSrc < pSdfBuffer + s32BytesWritten)
+                if(generateMTSDF(pu8Dst, s32Stride, sstFontGen.pstFontFace->glyph, sstFontGen.fRange, 3.0) == 0)
                 {
-                  orxMemory_Copy(pu8Dst, pSrc, s32BitmapWidth * sizeof(orxRGBA));
-                  pu8Dst += sizeof(orxRGBA) * s32Width;
-
-                  pSrc += s32Stride;
+                  orxFONTGEN_LOG(PROCESS, "Could not fit character [U+%X].", pstGlyph->u32CodePoint);
                 }
-
-                orxMemory_Free(pSdfBuffer);
               }
               else
               {
