@@ -1195,6 +1195,7 @@ static void Run()
         // Pops config
         orxConfig_PopSection();
 
+        orxString_NPrint(acBuffer, sizeof(acBuffer), "%s.png", sstFontGen.zFontName);
         // Saves texture
         stbi_write_png(acBuffer, s32Width, s32Height, sizeof(orxRGBA), pu8ImageBuffer, 0);
 
