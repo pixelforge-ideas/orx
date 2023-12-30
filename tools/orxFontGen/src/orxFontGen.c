@@ -152,11 +152,10 @@ static orxFONTGEN_STATIC sstFontGen;
  * Private functions                                                       *
  ***************************************************************************/
 
-static void GetFontShaderCode(orxCHAR* pacBuffer, orxU32 u32BufferSize, orxVECTOR vShadowMin, orxVECTOR vShadowMax)
+static void GetFontShaderCode(orxCHAR* pacBuffer, orxU32 u32BufferSize)
 {
   static const orxSTRING szShaderSource =
     "#define RANGE %.5f\n"
-    "#define REMAP_SHADOW(v) (((v) + 1.0) * vec2(%.5f, %.5f) + vec2(%.5f, %.5f))\n"
     "float linearstep(float a, float b, float x)\n"
     "{\n"
     "  return clamp((x - a) / (b - a), 0.0, 1.0);\n"
@@ -174,18 +173,10 @@ static void GetFontShaderCode(orxCHAR* pacBuffer, orxU32 u32BufferSize, orxVECTO
     "  float sd = 2.0 * median(msd.r, msd.g, msd.b) - 1.0 + Thickness;\n"
     "  float inside = linearstep(-Outline - pxSize, -Outline + pxSize, sd);\n"
     "  float outsideBorder = Outline > 0.0 ? linearstep(Outline - pxSize, Outline + pxSize, sd) : 1.0;\n"
-    "  vec4 fg = vec4(mix(OutlineColor, gl_Color.rgb, outsideBorder), inside);\n"
-    "  msd = texture2D(Tex, uv - REMAP_SHADOW(Shadow.xy)).rgb;\n"
-    "  sd = 2.0 * median(msd.r, msd.g, msd.b) - 1.0 + Outline + Thickness;\n"
-    "  float shadow = ShadowAlpha * linearstep(-Shadow.z - pxSize, Shadow.z + pxSize, sd);\n"
-    "  gl_FragColor = vec4(mix(ShadowColor, fg.rgb, fg.a), (shadow - shadow * fg.a + fg.a));\n"
+    "  gl_FragColor = vec4(mix(OutlineColor, gl_Color.rgb, outsideBorder), inside * gl_Color.a);\n"
     "}\n";
 
-  orxString_NPrint(pacBuffer, u32BufferSize, szShaderSource,
-    sstFontGen.fRange,
-    0.5f * (vShadowMax.fX - vShadowMin.fX),
-    0.5f * (vShadowMax.fY - vShadowMin.fY),
-    vShadowMin.fX, vShadowMin.fY);
+  orxString_NPrint(pacBuffer, u32BufferSize, szShaderSource, sstFontGen.fRange);
 }
 
 static orxBOOL orxFASTCALL SaveFilter(const orxSTRING _zSectionName, const orxSTRING _zKeyName, const orxSTRING _zFileName, orxBOOL _bUseEncryption)
@@ -864,10 +855,6 @@ static void Run()
           {
             // Stores it
             s32MaxAscend = (orxS32)sstFontGen.pstFontFace->glyph->bitmap_top;
-            if (s32MaxAscend == 57)
-            {
-              orxLOG("AHA");
-            }
           }
 
           // Is descend bigger than any previous?
@@ -980,7 +967,11 @@ static void Run()
         orxS32            s32X, s32Y;
         orxFONTGEN_GLYPH *pstGlyph;
         orxCHAR           acBuffer[orxFONTGEN_KU32_BUFFER_SIZE], *pc;
-        orxVECTOR         vShadowMin, vShadowMax;
+
+        const orxSTRING azParamList[4] =
+        {
+          "Tex", "Thickness", "Outline", "OutlineColor"
+        };
 
         // Clears bitmap
         orxMemory_Zero(pu8ImageBuffer, s32Width * s32Height * sizeof(orxRGBA));
@@ -1093,11 +1084,6 @@ static void Run()
                 s32Stride = sizeof(orxRGBA) * s32Width;
                 pu8Dst = pu8ImageBuffer + sizeof(orxRGBA) * ((s32AdjustedY * s32Width) + s32AdjustedX);
 
-                if (pstGlyph->u32CodePoint == 'Q')
-                {
-                  orxLOG("Q");
-                }
-
                 if(generateMTSDF(pu8Dst, s32Stride, sstFontGen.pstFontFace->glyph, sstFontGen.fRange, 3.0) == 0)
                 {
                   orxFONTGEN_LOG(PROCESS, "Could not fit character [U+%X].", pstGlyph->u32CodePoint);
@@ -1197,25 +1183,13 @@ static void Run()
         orxString_NPrint(acBuffer, sizeof(acBuffer), "%sShader", sstFontGen.zFontName);
         orxConfig_PushSection(acBuffer);
 
-        // Update shadow constraints
-        orxVector_Set(&vShadowMin, -sstFontGen.fPadding / s32Width, -orxMAX(s32BaseLine - s32MaxAscend, sstFontGen.fPadding) / s32Height, orxFLOAT_0);
-        orxVector_Set(&vShadowMax, sstFontGen.fPadding / s32Width, orxMAX(s32MaxDescend, sstFontGen.fPadding) / s32Height, orxFLOAT_0);
-
-        orxCHAR* azParamList[7] =
-        {
-          "Tex", "Thickness", "Outline", "Shadow", "ShadowAlpha", "OutlineColor", "ShadowColor"
-        };
-
         orxConfig_SetBool("UseCustomParam", orxTRUE);
-        orxConfig_SetListString("ParamList", azParamList, 7);
+        orxConfig_SetListString("ParamList", azParamList, 4);
         orxConfig_SetU32("Thickness", 0);
         orxConfig_SetU32("Outline", 0);
-        orxConfig_SetVector("Shadow", &orxVECTOR_0);
-        orxConfig_SetFloat("ShadowAlpha", orxFLOAT_1);
         orxConfig_SetVector("OutlineColor", &orxVECTOR_0);
-        orxConfig_SetVector("ShadowColor", &orxVECTOR_0);
 
-        GetFontShaderCode(acBuffer, sizeof(acBuffer), vShadowMin, vShadowMax);
+        GetFontShaderCode(acBuffer, sizeof(acBuffer));
         orxConfig_SetStringBlock("Code", acBuffer);
 
         // Pops config
