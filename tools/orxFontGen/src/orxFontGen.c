@@ -1052,12 +1052,10 @@ static void Run()
                 orxS32 s32Stride;
 
                 s32Stride = sizeof(orxRGBA) * s32Width;
+
                 pu8Dst = pu8ImageBuffer + sizeof(orxRGBA) * ((s32AdjustedY * s32Width) + s32AdjustedX);
 
-                if(generateMTSDF(pu8Dst, s32Stride, sstFontGen.pstFontFace->glyph, sstFontGen.fPadding * 0.5f, 3.0) == 0)
-                {
-                  orxFONTGEN_LOG(PROCESS, "Could not fit character [U+%X].", pstGlyph->u32CodePoint);
-                }
+                generateMTSDF(pu8Dst, s32Stride, sstFontGen.pstFontFace->glyph, sstFontGen.fPadding * 0.5f, 3.0);
               }
               else
               {
